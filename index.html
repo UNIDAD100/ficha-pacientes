@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ficha de Atención a Pacientes</title>
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect } = React;
+
+/* ======================================================================
+   PEGA AQUÍ TUS 2 DATOS DE SUPABASE (Project Settings → Claves API)
+   ====================================================================== */
+const SUPABASE_URL = "https://gxjkyfnclhbdsfcwatzx.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_SNm76m-ZioiXnuRmiTuqLA_vwRuXL4M";
+/* ====================================================================== */
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const TABLE = "registros_pacientes";
+const REGISTROS_POR_HOJA = 20;
+
+/* ---------------------------------------------------------------------- */
+/* CATALOGOS (idénticos a los usados en el Excel)                          */
+/* ---------------------------------------------------------------------- */
+const CATALOGOS = {"DEPARTAMENTOS": [{"nombre": "Alta Verapaz", "municipios": ["Chahal", "Chisec", "Cobán", "Fray Bartolomé de las Casas", "Lanquín", "Panzós", "Raxruha", "San Cristóbal Verapaz", "San Juan Chamelco", "San Pedro Carchá", "Santa Cruz Verapaz", "Senahú", "Tactic", "Tamahú", "Tucurú", "Santa María Cahabón", "Santa Catarina La Tinta"]}, {"nombre": "Baja Verapaz", "municipios": ["Cubulco", "Granados", "Purulhá", "Rabinal", "Salamá", "San Jerónimo", "San Miguel Chicaj", "Santa Cruz El Chol"]}, {"nombre": "Chimaltenango", "municipios": ["Acatenango", "Chimaltenango", "El Tejar", "Parramos", "Patzicía", "Patzún", "Pochuta", "San Andrés Itzapa", "San José Poaquil", "San Juan Comalapa", "San Martín Jilotepeque", "Santa Apolonia", "Santa Cruz Balanyá", "Tecpán Guatemala", "Yepocapa", "Zaragoza"]}, {"nombre": "Chiquimula", "municipios": ["Camotán", "Chiquimula", "Concepción Las Minas", "Esquipulas", "Ipala", "Jocotán", "Olopa", "Quezaltepeque", "San Jacinto", "San José La Arada", "San Juan Ermita"]}, {"nombre": "El Progreso", "municipios": ["El Jícaro", "Guastatoya", "Morazán", "San Agustín Acasaguastlán", "San Antonio La Paz", "San Cristóbal Acasaguastlán", "Sanarate"]}, {"nombre": "Escuintla", "municipios": ["Escuintla", "Guanagazapa", "Iztapa", "La Democracia", "La Gomera", "Masagua", "Nueva Concepción", "Palín", "San José", "San Vicente Pacaya", "Santa Lucía Cotzumalguapa", "Siquinalá", "Tiquisate"]}, {"nombre": "Guatemala", "municipios": ["Amatitlán", "Chinautla", "Chuarrancho", "Fraijanes", "Guatemala City", "Mixco", "Palencia", "Petapa", "San José del Golfo", "San José Pinula", "San Juan Sacatepéquez", "San Pedro Ayampuc", "San Pedro Sacatepéquez", "San Raymundo", "Santa Catarina Pinula", "Villa Canales"]}, {"nombre": "Huehuetenango", "municipios": ["Aguacatán", "Chiantla", "Colotenango", "Concepción Huista", "Cuilco", "Huehuetenango", "Ixtahuacán", "Jacaltenango", "La Democracia", "La Libertad", "Malacatancito", "Nentón", "San Antonio Huista", "San Gaspar Ixchil", "San Juan Atitán", "San Juan Ixcoy", "San Mateo Ixtatán", "San Miguel Acatán", "San Pedro Necta", "San Rafael La Independencia", "San Rafael Petzal", "San Sebastián Coatán", "San Sebastián Huehuetenango", "Santa Ana Huista", "Santa Bárbara", "Santa Cruz Barillas", "Santa Eulalia", "Santiago Chimaltenango", "Soloma", "Tectitán", "Todos Santos Cuchumatan"]}, {"nombre": "Izabal", "municipios": ["El Estor", "Livingston", "Los Amates", "Morales", "Puerto Barrios"]}, {"nombre": "Jalapa", "municipios": ["Jalapa", "Mataquescuintla", "Monjas", "San Carlos Alzatate", "San Luis Jilotepeque", "San Manuel Chaparrón", "San Pedro Pinula"]}, {"nombre": "Jutiapa", "municipios": ["Agua Blanca", "Asunción Mita", "Atescatempa", "Comapa", "Conguaco", "El Adelanto", "El Progreso", "Jalpatagua", "Jerez", "Jutiapa", "Moyuta", "Pasaco", "Quezada", "San José Acatempa", "Santa Catarina Mita", "Yupiltepeque", "Zapotitlán"]}, {"nombre": "Petén", "municipios": ["Dolores", "Flores", "La Libertad", "Melchor de Mencos", "Poptún", "San Andrés", "San Benito", "San Francisco", "San José", "San Luis", "Santa Ana", "Sayaxché", "Las Cruces"]}, {"nombre": "Quetzaltenango", "municipios": ["Almolonga", "Cabricán", "Cajolá", "Cantel", "Coatepeque", "Colomba", "Concepción Chiquirichapa", "El Palmar", "Flores Costa Cuca", "Génova", "Huitán", "La Esperanza", "Olintepeque", "Ostuncalco", "Palestina de Los Altos", "Quetzaltenango", "Salcajá", "San Carlos Sija", "San Francisco La Unión", "San Martín Sacatepéquez", "San Mateo", "San Miguel Sigüilá", "Sibilia", "Zunil"]}, {"nombre": "Quiché", "municipios": ["Canillá", "Chajul", "Chicamán", "Chiché", "Chichicastenango", "Chinique", "Cunén", "Ixcán", "Joyabaj", "Nebaj", "Pachalum", "Patzité", "Sacapulas", "San Andrés Sajcabajá", "San Antonio Ilotenango", "San Bartolomé Jocotenango", "San Juan Cotzal", "San Pedro Jocopilas", "Santa Cruz del Quiché", "Uspantán", "Zacualpa"]}, {"nombre": "Retalhuleu", "municipios": ["Champerico", "El Asintal", "Nuevo San Carlos", "Retalhuleu", "San Andrés Villa Seca", "San Felipe", "San Martín Zapotitlán", "San Sebastián", "Santa Cruz Muluá"]}, {"nombre": "Sacatepéquez", "municipios": ["Alotenango", "Antigua", "Ciudad Vieja", "Jocotenango", "Magdalena Milpas Altas", "Pastores", "San Antonio Aguas Calientes", "San Bartolomé Milpas Altas", "San Lucas Sacatepéquez", "San Miguel Dueñas", "Santa Catarina Barahona", "Santa Lucía Milpas Altas", "Santa María de Jesús", "Santiago Sacatepéquez", "Santo Domingo Xenacoj", "Sumpango"]}, {"nombre": "San Marcos", "municipios": ["Ayutla", "Catarina", "Comitancillo", "Concepción Tutuapa", "El Quetzal", "El Rodeo", "El Tumbador", "Esquipulas Palo Gordo", "Ixchiguan", "La Reforma", "Malacatán", "Nuevo Progreso", "Ocos", "Pajapita", "Río Blanco", "San Antonio Sacatepéquez", "San Cristóbal Cucho", "San José Ojetenam", "San Lorenzo", "San Marcos", "San Miguel Ixtahuacán", "San Pablo", "San Pedro Sacatepéquez", "San Rafael Pie de La Cuesta", "San Sibinal", "Sipacapa", "Tacaná", "Tajumulco", "Tejutla"]}, {"nombre": "Santa Rosa", "municipios": ["Barberena", "Casillas", "Chiquimulilla", "Cuilapa", "Guazacapán", "Nueva Santa Rosa", "Oratorio", "Pueblo Nuevo Viñas", "San Juan Tecuaco", "San Rafael Las Flores", "Santa Cruz Naranjo", "Santa María Ixhuatán", "Santa Rosa de Lima", "Taxisco"]}, {"nombre": "Sololá", "municipios": ["Concepción", "Nahualá", "Panajachel", "San Andrés Semetabaj", "San Antonio Palopó", "San José Chacaya", "San Juan La Laguna", "San Lucas Tolimán", "San Marcos La Laguna", "San Pablo La Laguna", "San Pedro La Laguna", "Santa Catarina Ixtahuacan", "Santa Catarina Palopó", "Santa Clara La Laguna", "Santa Cruz La Laguna", "Santa Lucía Utatlán", "Santa María Visitación", "Santiago Atitlán", "Sololá"]}, {"nombre": "Suchitepéquez", "municipios": ["Chicacao", "Cuyotenango", "Mazatenango", "Patulul", "Pueblo Nuevo", "Río Bravo", "Samayac", "San Antonio Suchitepéquez", "San Bernardino", "San Francisco Zapotitlán", "San Gabriel", "San José El Idolo", "San Juan Bautista", "San Lorenzo", "San Miguel Panán", "San Pablo Jocopilas", "Santa Bárbara", "Santo Domingo Suchitepequez", "Santo Tomas La Unión", "Zunilito"]}, {"nombre": "Totonicapán", "municipios": ["Momostenango", "San Andrés Xecul", "San Bartolo", "San Cristóbal Totonicapán", "San Francisco El Alto", "Santa Lucía La Reforma", "Santa María Chiquimula", "Totonicapán"]}, {"nombre": "Zacapa", "municipios": ["Cabañas", "Estanzuela", "Gualán", "Huité", "La Unión", "Río Hondo", "San Diego", "Teculután", "Usumatlán", "Zacapa"]}], "IDIOMAS_MAYAS": ["Achi'", "Akateko", "Awakateko", "Chalchiteko", "Ch'orti'", "Chuj", "Itza'", "Ixil", "Jakalteko (Popti')", "Kaqchikel", "K'iche'", "Mam", "Mopan", "Poqomam", "Poqomchi'", "Q'anjob'al", "Q'eqchi'", "Sakapulteko", "Sipakapense", "Tektiteko", "Tz'utujil", "Uspanteko"], "ESCOLARIDAD": ["1-Analfabeta", "2-Alfabeta", "3-Primaria Incompleta", "4-Primaria Completa", "5-Básico Incompleto", "6-Básico Completo", "7-Diversificado Incompleto", "8-Diversificado Completo", "9-Universidad Incompleta", "10-Universidad Completa"], "ORIENTACION_SEXUAL": ["0-No aplica", "1-Heterosexual", "2-Bisexual", "3-Homosexual", "99-Sin dato"], "IDENTIDAD_GENERO": ["0-No aplica", "1-Personas Trans", "99-Sin dato"], "CONDICION_RIESGO": ["1-Privado de Libertad", "2-Adolescente en riesgo Psicosocial", "3-Migrante interno", "4-Migrante internacional", "5-Hombre en Riesgo", "6-Mujer en Riesgo", "7-Uniformado", "8-Trabajo Sexual", "9-Clientes de trabajadores/as sexuales", "10-Niño/a en contexto de vulnerabilidad"], "MOTIVO_ORIENTACION": ["1-Referencia", "2-Iniciativa Propia", "3-Tuberculosis", "4-Embarazo", "5-Infección de Transmisión Sexual", "6-Accidente Laboral", "7-Profilaxia Sexual", "8-Pareja con VIH", "9-Hijo de Padre y/o Madre Seropositivo", "10-Agresión Sexual", "11-Transfusión sanguínea", "12-Usuario de drogas inyectables", "13-Otros riesgos sanitarios", "14-Pareja de Embarazada", "99-Sin dato"], "MESES": ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], "ESTADO_CIVIL": ["Soltero/a", "Casado/a", "Unido/a", "Divorciado/a", "Separado/a", "Viudo/a", "Sin dato"], "PUEBLO": ["1-Ladino/Mestizo", "2-Indígena", "3-Garífuna", "4-Xinca", "99-Sin dato"], "SI_NO": ["Sí", "No"], "SEXO_NACER": ["Hombre", "Mujer"], "NACIONALIDAD": ["Guatemalteca", "Salvadoreña", "Hondureña", "Nicaragüense", "Costarricense", "Panameña", "Beliceña", "Extranjera (otro país)"], "CONTROL_PRENATAL": ["0-No aplica", "1-Primero", "2-Segundo", "3-Tercer", "4-Cuarto", "5-Mas de cuatro", "6-Parto / post parto", "7-Puerperio temprano", "99-Sin dato"], "SERVICIOS": ["Emergencia Masculina", "Emergencia Femenina", "Emergencia Embarazadas", "Emergencia Pediatría Masculina", "Emergencia Pediatría Femenina", "Labor y Partos - Embarazadas", "Medicina Masculina", "Medicina Masculina Coex", "Medicina Femenina", "Medicina Femenina Coex", "Cirugía Masculina", "Cirugía Masculina Coex", "Cirugía Femenina", "Cirugía Femenina Coex", "Trauma Masculino", "Trauma Masculino Coex", "Trauma Femenino", "Trauma Femenino Coex", "Pediatría Masculina", "Pediatría Femenina", "Recién Nacidos Masculino", "Recién Nacidos Femenino", "Obstetricia Coex", "Ginecología Coex", "Clasificación Coex Masculina", "Clasificación Coex Femenina", "Maternidad Post Parto", "Clínica 1 Masculina", "Clínica 1 Femenina Coex", "Coex Pediatría Masculina", "Coex Pediatría Femenina", "UAI Masculino", "UAI Femenino"]};
+
+const COLUMNS = [
+  ["no_hoja", "NO. HOJA"],
+  ["no_orden", "NO. DE ORDEN"],
+  ["mes", "MES"],
+  ["anio", "AÑO"],
+  ["fecha_orientacion", "FECHA (DIA DE LA ORIENTACION)"],
+  ["cui_pasaporte", "CUI / PASAPORTE"],
+  ["buscar_persona", "BUSCAR PERSONA"],
+  ["primer_nombre", "PRIMER NOMBRE"],
+  ["segundo_nombre", "SEGUNDO NOMBRE"],
+  ["primer_apellido", "PRIMER APELLIDO"],
+  ["segundo_apellido", "SEGUNDO APELLIDO"],
+  ["apellido_casada", "APELLIDO DE CASADA"],
+  ["iniciales", "INICIALES"],
+  ["sexo_nacer", "SEXO AL NACER"],
+  ["fecha_nacimiento", "FECHA DE NACIMIENTO"],
+  ["edad", "EDAD"],
+  ["nacionalidad", "NACIONALIDAD"],
+  ["menor_edad", "MENOR DE EDAD"],
+  ["cui_menor", "CUI (SI ES MENOR DE EDAD)"],
+  ["depto_nacimiento", "DEPARTAMENTO DE NACIMIENTO"],
+  ["muni_nacimiento", "MUNICIPIO DE NACIMIENTO"],
+  ["depto_residencia", "DEPARTAMENTO DE RESIDENCIA"],
+  ["muni_residencia", "MUNICIPIO DE RESIDENCIA"],
+  ["direccion_residencia", "DIRECCION DE RESIDENCIA"],
+  ["telefono", "No. DE TELEFONO"],
+  ["pueblo", "PUEBLO"],
+  ["comunidad_linguistica", "COMUNIDAD LINGÜÍSTICA"],
+  ["estado_civil", "ESTADO CIVIL"],
+  ["orientacion_sexual", "ORIENTACION SEXUAL"],
+  ["identidad_genero", "IDENTIDAD DE GENERO"],
+  ["escolaridad", "ESCOLARIDAD"],
+  ["condicion_riesgo", "CONDICION DE RIESGO"],
+  ["motivo_orientacion", "MOTIVO DE ORIENTACION"],
+  ["orientacion_pre_prueba", "ORIENTACION PRE PRUEBA"],
+  ["control_prenatal", "CONTROL PRENATAL"],
+  ["semana_gestacion", "SEMANA DE GESTACION"],
+  ["se_hizo_prueba", "SE HIZO LA PRUEBA"],
+  ["servicio", "SERVICIO"],
+];
+
+const FIELD_STEPS = {
+  mes: "identificacion", anio: "identificacion", fecha_orientacion: "identificacion",
+  primer_nombre: "identificacion", primer_apellido: "identificacion",
+  sexo_nacer: "identificacion", fecha_nacimiento: "identificacion", nacionalidad: "identificacion",
+  cui_menor: "identificacion",
+  depto_nacimiento: "ubicacion", muni_nacimiento: "ubicacion",
+  depto_residencia: "ubicacion", muni_residencia: "ubicacion",
+  pueblo: "sociodemografico", comunidad_linguistica: "sociodemografico", estado_civil: "sociodemografico",
+  orientacion_sexual: "sociodemografico", identidad_genero: "sociodemografico", escolaridad: "sociodemografico",
+  condicion_riesgo: "sociodemografico", motivo_orientacion: "sociodemografico", orientacion_pre_prueba: "sociodemografico",
+  control_prenatal: "embarazo", semana_gestacion: "embarazo",
+  se_hizo_prueba: "cierre", servicio: "cierre",
+};
+
+const FIELD_LABELS = {
+  mes: "Mes", anio: "Año", fecha_orientacion: "Fecha (día de la orientación)",
+  primer_nombre: "Primer nombre", primer_apellido: "Primer apellido",
+  sexo_nacer: "Sexo al nacer", fecha_nacimiento: "Fecha de nacimiento", nacionalidad: "Nacionalidad",
+  cui_menor: "CUI (si es menor de edad)",
+  depto_nacimiento: "Departamento de nacimiento", muni_nacimiento: "Municipio de nacimiento",
+  depto_residencia: "Departamento de residencia", muni_residencia: "Municipio de residencia",
+  direccion_residencia: "Dirección de residencia",
+  pueblo: "Pueblo", comunidad_linguistica: "Comunidad lingüística", estado_civil: "Estado civil",
+  orientacion_sexual: "Orientación sexual", identidad_genero: "Identidad de género", escolaridad: "Escolaridad",
+  condicion_riesgo: "Condición de riesgo", motivo_orientacion: "Motivo de orientación",
+  orientacion_pre_prueba: "Orientación pre prueba",
+  control_prenatal: "Control prenatal", semana_gestacion: "Semana de gestación",
+  se_hizo_prueba: "Se hizo la prueba", servicio: "Servicio",
+};
+
+function camposFaltantes(form) {
+  const faltantes = [];
+  for (const key of Object.keys(FIELD_STEPS)) {
+    if (key === "cui_menor" && form.menor_edad !== "Sí") continue;
+    if ((key === "control_prenatal" || key === "semana_gestacion") && form.motivo_orientacion !== "4-Embarazo") continue;
+    const val = form[key];
+    if (val === "" || val === null || val === undefined) faltantes.push(key);
+  }
+  return faltantes;
+}
+
+const EMPTY_FORM_BASE = {
+  mes: "", anio: "", fecha_orientacion: "", cui_pasaporte: "", buscar_persona: "",
+  primer_nombre: "", segundo_nombre: "", primer_apellido: "", segundo_apellido: "", apellido_casada: "",
+  iniciales: "", sexo_nacer: "", fecha_nacimiento: "", edad: "", nacionalidad: "",
+  menor_edad: "", cui_menor: "", depto_nacimiento: "", muni_nacimiento: "",
+  depto_residencia: "", muni_residencia: "", direccion_residencia: "", telefono: "",
+  pueblo: "", comunidad_linguistica: "", estado_civil: "", orientacion_sexual: "",
+  identidad_genero: "", escolaridad: "", condicion_riesgo: "", motivo_orientacion: "",
+  orientacion_pre_prueba: "", control_prenatal: "", semana_gestacion: "", se_hizo_prueba: "",
+  servicio: "",
+};
+
+function mesActualNombre() { return CATALOGOS.MESES[new Date().getMonth()]; }
+function fechaHoyISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function calcularEdad(fechaISO) {
+  if (!fechaISO) return "";
+  const hoy = new Date();
+  const nac = new Date(fechaISO + "T00:00:00");
+  if (isNaN(nac.getTime())) return "";
+  let edad = hoy.getFullYear() - nac.getFullYear();
+  const sinCumplirAun = hoy.getMonth() < nac.getMonth() || (hoy.getMonth() === nac.getMonth() && hoy.getDate() < nac.getDate());
+  if (sinCumplirAun) edad--;
+  return edad < 0 ? "" : edad;
+}
+function calcularIniciales(nombre, apellido) {
+  const n = (nombre || "").trim().slice(0, 2).toUpperCase();
+  const a = (apellido || "").trim().slice(0, 2).toUpperCase();
+  return n + a;
+}
+function getDefaultForm() {
+  return {
+    ...EMPTY_FORM_BASE,
+    mes: mesActualNombre(),
+    anio: new Date().getFullYear(),
+    fecha_orientacion: fechaHoyISO(),
+    se_hizo_prueba: "Sí",
+    orientacion_pre_prueba: "Sí",
+    nacionalidad: "Guatemalteca",
+    identidad_genero: "0-No aplica",
+    orientacion_sexual: "1-Heterosexual",
+  };
+}
+
+function Field({ label, required, children, hint }) {
+  return (
+    <div className="mb-4">
+      <label className="block text-sm font-medium text-slate-700 mb-1">
+        {label}{required && <span className="text-teal-600"> *</span>}
+      </label>
+      {children}
+      {hint && <p className="text-xs text-slate-400 mt-1">{hint}</p>}
+    </div>
+  );
+}
+function TextInput({ value, onChange, type = "text", placeholder = "" }) {
+  return (
+    <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500" />
+  );
+}
+function SelectInput({ value, onChange, options, placeholder = "Seleccione...", disabled }) {
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled}
+      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 disabled:bg-slate-100 disabled:text-slate-400">
+      <option value="">{placeholder}</option>
+      {options.map((o) => <option key={o} value={o}>{o}</option>)}
+    </select>
+  );
+}
+function SearchableSelect({ value, onChange, options, placeholder = "Seleccione..." }) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const filtered = query.trim()
+    ? options.filter((o) => o.toLowerCase().includes(query.trim().toLowerCase()))
+    : options;
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={open ? query : value}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+        onFocus={() => { setQuery(""); setOpen(true); }}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder={placeholder}
+        autoComplete="off"
+        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+      />
+      {open && (
+        <div className="absolute z-20 mt-1 w-full max-h-48 overflow-y-auto bg-white border border-slate-300 rounded-lg shadow-lg">
+          {filtered.length === 0 && <div className="px-3 py-2 text-xs text-slate-400">Sin resultados</div>}
+          {filtered.map((o) => (
+            <div
+              key={o}
+              onMouseDown={() => { onChange(o); setQuery(""); setOpen(false); }}
+              className="px-3 py-2 text-sm text-slate-700 hover:bg-teal-50 cursor-pointer"
+            >
+              {o}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FichaPacientes() {
+  const [form, setForm] = useState(getDefaultForm);
+  const [stepIdx, setStepIdx] = useState(0);
+  const [savedCount, setSavedCount] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [showRegistros, setShowRegistros] = useState(false);
+  const [registros, setRegistros] = useState([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [userRole, setUserRole] = useState(null); // "admin" | "visualizador" | null
+  const [showAdminLogin, setShowAdminLogin] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [adminEmail, setAdminEmail] = useState("");
+  const [adminInput, setAdminInput] = useState("");
+  const [adminError, setAdminError] = useState("");
+  const [mesEliminar, setMesEliminar] = useState("");
+  const [dialog, setDialog] = useState(null);
+  const [toast, setToast] = useState("");
+  const [editId, setEditId] = useState(null);
+  const [editHojaOrden, setEditHojaOrden] = useState({ hoja: 0, orden: 0 });
+  const [lastSaved, setLastSaved] = useState({ hoja: 0, orden: 0, edited: false });
+
+  function pedirConfirmacion(message) {
+    return new Promise((resolve) => setDialog({ message, resolve }));
+  }
+  function mostrarAviso(message) {
+    setToast(message);
+    setTimeout(() => setToast(""), 4000);
+  }
+
+  const set = (key) => (value) => setForm((f) => ({ ...f, [key]: value }));
+
+  function handleFechaNacimiento(value) {
+    setForm((f) => {
+      const edad = calcularEdad(value);
+      return { ...f, fecha_nacimiento: value, edad, menor_edad: edad === "" ? f.menor_edad : (edad < 18 ? "Sí" : "No") };
+    });
+  }
+  function handlePrimerNombre(value) {
+    setForm((f) => ({ ...f, primer_nombre: value, iniciales: calcularIniciales(value, f.primer_apellido) }));
+  }
+  function handlePrimerApellido(value) {
+    setForm((f) => ({ ...f, primer_apellido: value, iniciales: calcularIniciales(f.primer_nombre, value) }));
+  }
+
+  function handleCui(key) {
+    return (value) => set(key)(value.replace(/\D/g, "").slice(0, 13));
+  }
+
+  async function cargarConteo() {
+    try {
+      const { data, error } = await supabase.rpc("siguiente_hoja_orden");
+      if (error) throw error;
+      const row = data && data[0];
+      const count = row ? (row.hoja - 1) * REGISTROS_POR_HOJA + (row.orden - 1) : 0;
+      setSavedCount(count);
+    } catch (e) {
+      setSavedCount(0);
+    } finally {
+      setLoaded(true);
+    }
+  }
+  useEffect(() => { cargarConteo(); }, []);
+
+  async function cargarRol() {
+    const { data: userData } = await supabase.auth.getUser();
+    const uid = userData?.user?.id;
+    if (!uid) return null;
+    const { data, error: err } = await supabase.from("perfiles").select("rol").eq("user_id", uid).single();
+    if (err || !data) return null;
+    return data.rol;
+  }
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data?.session) {
+        const rol = await cargarRol();
+        setUserRole(rol);
+        setIsAdmin(rol === "admin");
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (form.pueblo === "2-Indígena") {
+      if (form.comunidad_linguistica === "Español") set("comunidad_linguistica")("");
+    } else {
+      set("comunidad_linguistica")("Español");
+    }
+  }, [form.pueblo]);
+
+  const stepsBase = ["portada", "identificacion", "ubicacion", "sociodemografico"];
+  if (form.motivo_orientacion === "4-Embarazo") stepsBase.push("embarazo");
+  stepsBase.push("cierre");
+  const steps = stepsBase;
+  const currentStep = steps[Math.min(stepIdx, steps.length - 1)];
+  const previewHoja = Math.floor(savedCount / REGISTROS_POR_HOJA) + 1;
+  const previewOrden = (savedCount % REGISTROS_POR_HOJA) + 1;
+
+  function next() { setStepIdx((i) => Math.min(i + 1, steps.length - 1)); }
+  function back() { setStepIdx((i) => Math.max(i - 1, 0)); }
+
+  async function handleSubmit() {
+    setError("");
+    const faltantes = camposFaltantes(form);
+    if (faltantes.length > 0) {
+      setError(`Faltan campos obligatorios: ${faltantes.map((k) => FIELD_LABELS[k]).join(", ")}.`);
+      setStepIdx(steps.indexOf(FIELD_STEPS[faltantes[0]]));
+      return;
+    }
+    if (form.cui_pasaporte && form.cui_pasaporte.length !== 13) {
+      setError("El CUI debe tener exactamente 13 dígitos.");
+      setStepIdx(steps.indexOf("identificacion"));
+      return;
+    }
+    if (form.menor_edad === "Sí" && form.cui_menor.length !== 13) {
+      setError("El CUI del menor debe tener exactamente 13 dígitos.");
+      setStepIdx(steps.indexOf("identificacion"));
+      return;
+    }
+    if (editId === null && form.mes !== mesActualNombre()) {
+      setError(`El mes registrado debe ser el mes actual (${mesActualNombre()}). Corrígelo en "Datos de identificación".`);
+      setStepIdx(steps.indexOf("identificacion"));
+      return;
+    }
+    setSaving(true);
+    try {
+      if (editId !== null) {
+        const { error: err } = await supabase.from(TABLE).update({ data: form, mes: form.mes }).eq("id", editId);
+        if (err) throw err;
+        setLastSaved({ hoja: editHojaOrden.hoja, orden: editHojaOrden.orden, edited: true });
+      } else {
+        const { data: rpcData, error: rpcErr } = await supabase.rpc("insertar_registro_paciente", {
+          p_mes: form.mes,
+          p_data: form,
+        });
+        if (rpcErr) throw rpcErr;
+        const { hoja, orden } = rpcData[0];
+        setLastSaved({ hoja, orden, edited: false });
+      }
+      await cargarConteo();
+      setSubmitted(true);
+    } catch (e) {
+      setError("No se pudo guardar el registro. Revisa tu conexión e intenta de nuevo.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function registrarOtro() {
+    setForm(getDefaultForm());
+    setStepIdx(0);
+    setSubmitted(false);
+    setEditId(null);
+  }
+  function cancelarEdicion() {
+    setForm(getDefaultForm());
+    setEditId(null);
+    setStepIdx(0);
+    setError("");
+    mostrarAviso("Edición cancelada.");
+  }
+  function limpiarFormulario() {
+    setForm(getDefaultForm());
+    setStepIdx(0);
+    setError("");
+    mostrarAviso("Formulario limpiado.");
+  }
+  function iniciarEdicion(registro) {
+    setForm({ ...getDefaultForm(), ...registro });
+    setEditId(registro.id);
+    setEditHojaOrden({ hoja: registro.no_hoja, orden: registro.no_orden });
+    setStepIdx(0);
+    setSubmitted(false);
+    setShowRegistros(false);
+    setShowAdminPanel(false);
+  }
+
+  async function cargarRegistros() {
+    try {
+      const { data, error: err } = await supabase.from(TABLE).select("*").order("id", { ascending: true });
+      if (err) throw err;
+      setRegistros((data || []).map((r) => ({ id: r.id, no_hoja: r.no_hoja, no_orden: r.no_orden, ...r.data })));
+    } catch (e) {
+      setRegistros([]);
+    }
+  }
+  async function abrirPanelAdmin() { await cargarRegistros(); setShowAdminPanel(true); }
+
+  async function handleAdminLogin() {
+    setAdminError("");
+    const { error: err } = await supabase.auth.signInWithPassword({ email: adminEmail, password: adminInput });
+    if (err) {
+      setAdminError("Correo o contraseña incorrectos.");
+      return;
+    }
+    const rol = await cargarRol();
+    if (!rol) {
+      setAdminError("Tu usuario no tiene un rol asignado. Pide que te agreguen a la tabla 'perfiles'.");
+      await supabase.auth.signOut();
+      return;
+    }
+    setUserRole(rol);
+    setIsAdmin(rol === "admin");
+    setShowAdminLogin(false);
+    setAdminInput("");
+    abrirPanelAdmin();
+  }
+
+  async function cerrarSesionAdmin() {
+    await supabase.auth.signOut();
+    setIsAdmin(false);
+    setUserRole(null);
+    setShowAdminPanel(false);
+  }
+
+  async function eliminarRegistro(id) {
+    const ok = await pedirConfirmacion("¿Eliminar este registro? No se puede deshacer.");
+    if (!ok) return;
+    try {
+      const { error: err } = await supabase.from(TABLE).delete().eq("id", id);
+      if (err) throw err;
+      await cargarRegistros();
+      await cargarConteo();
+      mostrarAviso("Registro eliminado.");
+    } catch (e) {
+      mostrarAviso("No se pudo eliminar. Intenta de nuevo.");
+    }
+  }
+  async function vaciarTodo() {
+    const ok = await pedirConfirmacion("Esto borra TODOS los registros guardados, para todos. ¿Ya descargaste el Excel de respaldo? Esta acción no se puede deshacer.");
+    if (!ok) return;
+    try {
+      const { error: err } = await supabase.from(TABLE).delete().gt("id", 0);
+      if (err) throw err;
+      await cargarRegistros();
+      await cargarConteo();
+      mostrarAviso("Se vaciaron todos los registros.");
+    } catch (e) {
+      mostrarAviso("No se pudo vaciar. Intenta de nuevo.");
+    }
+  }
+  async function eliminarPorMes(mes) {
+    if (!mes) { mostrarAviso("Selecciona primero un mes."); return; }
+    try {
+      const { count } = await supabase.from(TABLE).select("*", { count: "exact", head: true }).eq("mes", mes);
+      if (!count) { mostrarAviso(`No hay registros de ${mes}.`); return; }
+      const ok = await pedirConfirmacion(`Esto borra ${count} registro(s) de ${mes}, para todos. ¿Ya descargaste el Excel de respaldo? Esta acción no se puede deshacer.`);
+      if (!ok) return;
+      const { error: err } = await supabase.from(TABLE).delete().eq("mes", mes);
+      if (err) throw err;
+      await cargarRegistros();
+      await cargarConteo();
+      mostrarAviso(`Se eliminaron ${count} registro(s) de ${mes}.`);
+    } catch (e) {
+      mostrarAviso("No se pudo eliminar. Intenta de nuevo.");
+    }
+  }
+
+  async function handleExport() {
+    try {
+      const { data, error: err } = await supabase.from(TABLE).select("*").order("id", { ascending: true });
+      if (err) throw err;
+      const arr = (data || []).map((r) => ({ no_hoja: r.no_hoja, no_orden: r.no_orden, ...r.data }));
+      if (arr.length === 0) { mostrarAviso("Todavía no hay registros guardados."); return; }
+      const headers = COLUMNS.map(([, label]) => label);
+      const rows = arr.map((rec) => COLUMNS.map(([key]) => rec[key] ?? ""));
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Formulario");
+      XLSX.writeFile(wb, "registros_pacientes.xlsx");
+    } catch (e) {
+      mostrarAviso("No se pudo exportar. Intenta de nuevo.");
+    }
+  }
+
+  const municipiosNacimiento = CATALOGOS.DEPARTAMENTOS.find((d) => d.nombre === form.depto_nacimiento)?.municipios || [];
+  const municipiosResidencia = CATALOGOS.DEPARTAMENTOS.find((d) => d.nombre === form.depto_residencia)?.municipios || [];
+  const departamentosNombres = CATALOGOS.DEPARTAMENTOS.map((d) => d.nombre);
+
+  const stepTitles = {
+    portada: "Bienvenida", identificacion: "Datos de identificación", ubicacion: "Ubicación",
+    sociodemografico: "Datos sociodemográficos y clínicos", embarazo: "Datos del embarazo", cierre: "Cierre",
+  };
+
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    return (
+      <div className="p-6 max-w-md mx-auto mt-10 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+        Falta configurar SUPABASE_URL y SUPABASE_ANON_KEY arriba en el código de este archivo (busca el bloque
+        que dice "PEGA AQUÍ TUS 2 DATOS DE SUPABASE").
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen w-full bg-slate-50 flex justify-center py-6 px-3">
+      {dialog && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl shadow-lg p-5 max-w-sm w-full">
+            <p className="text-sm text-slate-700 mb-4">{dialog.message}</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => { dialog.resolve(false); setDialog(null); }} className="text-xs px-3 py-1.5 rounded-lg text-slate-500 hover:bg-slate-100">Cancelar</button>
+              <button onClick={() => { dialog.resolve(true); setDialog(null); }} className="text-xs px-3 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700">Sí, continuar</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {toast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs px-4 py-2 rounded-lg shadow-lg z-50">{toast}</div>
+      )}
+      <div className="w-full max-w-xl">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className="bg-teal-600 text-white rounded-lg p-2">📋</div>
+            <div>
+              <h1 className="text-sm font-semibold text-slate-800">Ficha de Atención a Pacientes</h1>
+              <p className="text-xs text-slate-500">{loaded ? `${savedCount} registro(s) guardado(s)` : "Cargando..."}</p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => (userRole ? abrirPanelAdmin() : setShowAdminLogin(true))} className="text-xs flex items-center gap-1 rounded-lg border border-slate-300 px-2 py-1.5 text-slate-600 hover:bg-slate-100" title="Acceso de administrador o visualizador">🔒 Acceso</button>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+          {submitted ? (
+            <div className="text-center py-10">
+              <div className="text-4xl mb-3">✅</div>
+              <h2 className="text-lg font-semibold text-slate-800">{lastSaved.edited ? "Registro actualizado" : "Registro guardado"}</h2>
+              <p className="text-sm text-slate-500 mt-1">Hoja {lastSaved.hoja}, Orden {lastSaved.orden}</p>
+              <button onClick={registrarOtro} className="mt-6 inline-flex items-center gap-2 bg-teal-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-teal-700">↩️ Registrar otro paciente</button>
+            </div>
+          ) : (
+            <>
+              <div className="flex gap-1 mb-5">
+                {steps.map((s, i) => (
+                  <div key={s} className={`h-1.5 flex-1 rounded-full ${i <= stepIdx ? "bg-teal-600" : "bg-slate-200"}`} />
+                ))}
+              </div>
+              <h2 className="text-base font-semibold text-slate-800 mb-4">{stepTitles[currentStep]}</h2>
+
+              {editId !== null && (
+                <div className="rounded-lg bg-indigo-50 border border-indigo-200 p-3 text-sm text-indigo-800 mb-4 flex items-center justify-between gap-3">
+                  <span>Estás editando el registro de <strong>{form.primer_nombre} {form.primer_apellido}</strong> (Hoja {editHojaOrden.hoja}, Orden {editHojaOrden.orden}).</span>
+                  <button onClick={cancelarEdicion} className="shrink-0 text-xs bg-white border border-indigo-300 text-indigo-700 px-2 py-1 rounded-lg hover:bg-indigo-100">Cancelar</button>
+                </div>
+              )}
+
+              {currentStep === "portada" && (
+                <div>
+                  <p className="text-sm text-slate-600 mb-3">Llena un registro por paciente. Los datos se guardan en la base de datos compartida.</p>
+                  <div className="rounded-lg bg-teal-50 border border-teal-100 p-3 text-sm text-teal-800">
+                    Este será el registro N.º {savedCount + 1} → Hoja {previewHoja}, Orden {previewOrden} (se calcula solo).
+                  </div>
+                </div>
+              )}
+
+              {currentStep === "identificacion" && (
+                <div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Mes" required hint={`Debe ser el mes actual (${mesActualNombre()})`}>
+                      <SelectInput value={form.mes} onChange={set("mes")} options={CATALOGOS.MESES} />
+                    </Field>
+                    <Field label="Año" required><TextInput value={form.anio} onChange={set("anio")} type="number" /></Field>
+                  </div>
+                  <Field label="Fecha (día de la orientación)" required>
+                    <TextInput value={form.fecha_orientacion} onChange={set("fecha_orientacion")} type="date" />
+                  </Field>
+                  <Field label="CUI / Pasaporte (opcional)" hint="Si es CUI, debe tener 13 dígitos">
+                    <TextInput value={form.cui_pasaporte} onChange={handleCui("cui_pasaporte")} placeholder="13 dígitos si es CUI" />
+                  </Field>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Primer nombre" required><TextInput value={form.primer_nombre} onChange={handlePrimerNombre} /></Field>
+                    <Field label="Segundo nombre (opcional)"><TextInput value={form.segundo_nombre} onChange={set("segundo_nombre")} /></Field>
+                    <Field label="Primer apellido" required><TextInput value={form.primer_apellido} onChange={handlePrimerApellido} /></Field>
+                    <Field label="Segundo apellido (opcional)"><TextInput value={form.segundo_apellido} onChange={set("segundo_apellido")} /></Field>
+                  </div>
+                  <Field label="Iniciales" hint="Se arma sola: 2 letras del primer nombre + 2 del primer apellido">
+                    <TextInput value={form.iniciales} onChange={() => {}} />
+                  </Field>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Sexo al nacer" required><SelectInput value={form.sexo_nacer} onChange={set("sexo_nacer")} options={CATALOGOS.SEXO_NACER} /></Field>
+                  </div>
+                  <Field label="Fecha de nacimiento" required><TextInput value={form.fecha_nacimiento} onChange={handleFechaNacimiento} type="date" /></Field>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Edad" hint="Se calcula sola"><TextInput value={form.edad} onChange={() => {}} type="number" /></Field>
+                    <Field label="Menor de edad" hint="Se calcula sola"><SelectInput value={form.menor_edad} onChange={() => {}} options={CATALOGOS.SI_NO} disabled /></Field>
+                  </div>
+                  <Field label="Nacionalidad" required><SelectInput value={form.nacionalidad} onChange={set("nacionalidad")} options={CATALOGOS.NACIONALIDAD} /></Field>
+                  {form.menor_edad === "Sí" && (
+                    <Field label="CUI (si es menor de edad)" required hint="13 dígitos">
+                      <TextInput value={form.cui_menor} onChange={handleCui("cui_menor")} placeholder="13 dígitos" />
+                    </Field>
+                  )}
+                </div>
+              )}
+
+              {currentStep === "ubicacion" && (
+                <div>
+                  <Field label="Departamento de nacimiento" required>
+                    <SelectInput value={form.depto_nacimiento} onChange={(v) => { set("depto_nacimiento")(v); set("muni_nacimiento")(""); }} options={departamentosNombres} />
+                  </Field>
+                  <Field label="Municipio de nacimiento" required>
+                    <SelectInput value={form.muni_nacimiento} onChange={set("muni_nacimiento")} options={municipiosNacimiento} disabled={!form.depto_nacimiento} placeholder={form.depto_nacimiento ? "Seleccione..." : "Elija primero el departamento"} />
+                  </Field>
+                  <Field label="Departamento de residencia" required>
+                    <SelectInput value={form.depto_residencia} onChange={(v) => { set("depto_residencia")(v); set("muni_residencia")(""); }} options={departamentosNombres} />
+                  </Field>
+                  <Field label="Municipio de residencia" required>
+                    <SelectInput value={form.muni_residencia} onChange={set("muni_residencia")} options={municipiosResidencia} disabled={!form.depto_residencia} placeholder={form.depto_residencia ? "Seleccione..." : "Elija primero el departamento"} />
+                  </Field>
+                  <Field label="Dirección de residencia (opcional)"><TextInput value={form.direccion_residencia} onChange={set("direccion_residencia")} /></Field>
+                  <Field label="No. de teléfono (opcional)"><TextInput value={form.telefono} onChange={set("telefono")} /></Field>
+                </div>
+              )}
+
+              {currentStep === "sociodemografico" && (
+                <div>
+                  <Field label="Pueblo" required><SelectInput value={form.pueblo} onChange={set("pueblo")} options={CATALOGOS.PUEBLO} /></Field>
+                  <Field label="Comunidad lingüística" required>
+                    {form.pueblo === "2-Indígena"
+                      ? <SelectInput value={form.comunidad_linguistica} onChange={set("comunidad_linguistica")} options={CATALOGOS.IDIOMAS_MAYAS} />
+                      : <TextInput value="Español" onChange={() => {}} />}
+                  </Field>
+                  <Field label="Estado civil" required><SelectInput value={form.estado_civil} onChange={set("estado_civil")} options={CATALOGOS.ESTADO_CIVIL} /></Field>
+                  <Field label="Orientación sexual" required><SelectInput value={form.orientacion_sexual} onChange={set("orientacion_sexual")} options={CATALOGOS.ORIENTACION_SEXUAL} /></Field>
+                  <Field label="Identidad de género" required><SelectInput value={form.identidad_genero} onChange={set("identidad_genero")} options={CATALOGOS.IDENTIDAD_GENERO} /></Field>
+                  <Field label="Escolaridad" required><SelectInput value={form.escolaridad} onChange={set("escolaridad")} options={CATALOGOS.ESCOLARIDAD} /></Field>
+                  <Field label="Condición de riesgo" required><SelectInput value={form.condicion_riesgo} onChange={set("condicion_riesgo")} options={CATALOGOS.CONDICION_RIESGO} /></Field>
+                  <Field label="Motivo de orientación" required hint="Si eliges '4-Embarazo' se habilita el paso de Datos del embarazo.">
+                    <SelectInput value={form.motivo_orientacion} onChange={set("motivo_orientacion")} options={CATALOGOS.MOTIVO_ORIENTACION} />
+                  </Field>
+                  <Field label="Orientación pre prueba" required><SelectInput value={form.orientacion_pre_prueba} onChange={set("orientacion_pre_prueba")} options={CATALOGOS.SI_NO} /></Field>
+                </div>
+              )}
+
+              {currentStep === "embarazo" && (
+                <div>
+                  <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800 mb-4">Este paso solo aparece porque el motivo de orientación es "4-Embarazo".</div>
+                  <Field label="Control prenatal" required><SelectInput value={form.control_prenatal} onChange={set("control_prenatal")} options={CATALOGOS.CONTROL_PRENATAL} /></Field>
+                  <Field label="Semana de gestación" required><TextInput value={form.semana_gestacion} onChange={set("semana_gestacion")} type="number" /></Field>
+                </div>
+              )}
+
+              {currentStep === "cierre" && (
+                <div>
+                  <Field label="Se hizo la prueba" required><SelectInput value={form.se_hizo_prueba} onChange={set("se_hizo_prueba")} options={CATALOGOS.SI_NO} /></Field>
+                  <Field label="Servicio (dónde se hizo el tamizaje)" required hint="Escribe para buscar, o haz clic para ver todas las opciones">
+                    <SearchableSelect value={form.servicio} onChange={set("servicio")} options={CATALOGOS.SERVICIOS} placeholder="Ej. Medicina Femenina" />
+                  </Field>
+                </div>
+              )}
+
+              {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mt-3">{error}</p>}
+
+              <div className="flex justify-between items-center mt-6 pt-4 border-t border-slate-100">
+                <div className="flex items-center gap-2">
+                  <button onClick={back} disabled={stepIdx === 0} className="flex items-center gap-1 text-sm text-slate-500 disabled:opacity-30 px-3 py-2">← Atrás</button>
+                  {editId === null && (
+                    <button onClick={limpiarFormulario} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 px-2 py-2">↺ Limpiar</button>
+                  )}
+                </div>
+                {currentStep === "cierre" ? (
+                  <button onClick={handleSubmit} disabled={saving} className="flex items-center gap-2 bg-teal-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-teal-700 disabled:opacity-50">
+                    💾 {saving ? "Guardando..." : editId !== null ? "Guardar cambios" : "Guardar registro"}
+                  </button>
+                ) : (
+                  <button onClick={next} className="flex items-center gap-1 bg-slate-800 text-white px-4 py-2 rounded-lg text-sm hover:bg-slate-700">Siguiente →</button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {showAdminLogin && (
+          <div className="mt-4 bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
+            <h3 className="text-sm font-semibold text-slate-800 mb-2">🔒 Acceso de administrador</h3>
+            <div className="mb-2">
+              <TextInput value={adminEmail} onChange={setAdminEmail} type="email" placeholder="Correo de administrador" />
+            </div>
+            <TextInput value={adminInput} onChange={setAdminInput} type="password" placeholder="Contraseña" />
+            {adminError && <p className="text-xs text-red-600 mt-1">{adminError}</p>}
+            <div className="flex gap-2 mt-3">
+              <button onClick={handleAdminLogin} className="text-xs bg-teal-600 text-white px-3 py-1.5 rounded-lg hover:bg-teal-700">Entrar</button>
+              <button onClick={() => { setShowAdminLogin(false); setAdminInput(""); setAdminEmail(""); setAdminError(""); }} className="text-xs text-slate-400 px-3 py-1.5">Cancelar</button>
+            </div>
+          </div>
+        )}
+
+        {showAdminPanel && userRole && (
+          <div className="mt-4 bg-white rounded-2xl shadow-sm border border-amber-200 p-4">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-sm font-semibold text-slate-800">
+                🔒 {userRole === "admin" ? "Panel de administrador" : "Vista de solo lectura"} ({registros.length} registros)
+              </h3>
+              <button onClick={cerrarSesionAdmin} className="text-xs text-slate-400">Cerrar sesión</button>
+            </div>
+            {userRole === "admin" && (
+              <>
+                <div className="flex gap-2 mb-3 flex-wrap">
+                  <button onClick={handleExport} className="text-xs flex items-center gap-1 bg-slate-800 text-white px-2 py-1.5 rounded-lg hover:bg-slate-700">⬇️ Exportar respaldo</button>
+                  <button onClick={vaciarTodo} className="text-xs flex items-center gap-1 bg-red-600 text-white px-2 py-1.5 rounded-lg hover:bg-red-700">🗑️ Vaciar todos los registros</button>
+                </div>
+                <div className="flex gap-2 mb-4 items-end flex-wrap">
+                  <div className="w-40"><SelectInput value={mesEliminar} onChange={setMesEliminar} options={CATALOGOS.MESES} placeholder="Elige un mes" /></div>
+                  <button onClick={() => eliminarPorMes(mesEliminar)} className="text-xs flex items-center gap-1 bg-amber-600 text-white px-2 py-1.5 rounded-lg hover:bg-amber-700">🗑️ Eliminar solo ese mes</button>
+                </div>
+              </>
+            )}
+            <div className="overflow-x-auto max-h-72 overflow-y-auto">
+              <table className="text-xs w-full">
+                <thead><tr className="text-left text-slate-400 border-b border-slate-100">
+                  <th className="pr-3 py-1">Hoja/Orden</th><th className="pr-3 py-1">Nombre</th><th className="pr-3 py-1">Fecha</th><th className="pr-3 py-1">Servicio</th>
+                  {userRole === "admin" && <th className="pr-3 py-1"></th>}
+                </tr></thead>
+                <tbody>
+                  {registros.map((r) => (
+                    <tr key={r.id} className="border-b border-slate-50 text-slate-600">
+                      <td className="pr-3 py-1">{r.no_hoja}/{r.no_orden}</td>
+                      <td className="pr-3 py-1">{r.primer_nombre} {r.primer_apellido}</td>
+                      <td className="pr-3 py-1">{r.fecha_orientacion}</td>
+                      <td className="pr-3 py-1">{r.servicio}</td>
+                      {userRole === "admin" && (
+                        <td className="pr-3 py-1 flex gap-2">
+                          <button onClick={() => iniciarEdicion(r)} className="text-teal-600 hover:text-teal-800 text-xs underline">Editar</button>
+                          <button onClick={() => eliminarRegistro(r.id)} className="text-red-500 hover:text-red-700">🗑️</button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {registros.length === 0 && <p className="text-xs text-slate-400 py-4 text-center">Sin registros todavía.</p>}
+            </div>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<FichaPacientes />);
+</script>
+</body>
+</html>
