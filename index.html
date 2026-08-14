@@ -563,12 +563,20 @@ function FichaPacientes() {
       });
       headerRow.height = 32;
 
+      function formatearFechaDMA(valor) {
+        if (!valor) return "";
+        const m = String(valor).match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (!m) return valor;
+        const [, anio, mes, dia] = m;
+        return `${dia}/${mes}/${anio}`;
+      }
+
       // Filas de datos, con bandas de color alternadas
       arr.forEach((rec, idx) => {
         const row = sheet.getRow(idx + 4);
         COLUMNS.forEach(([key], i) => {
           const cell = row.getCell(i + 1);
-          cell.value = rec[key] ?? "";
+          cell.value = key === "fecha_nacimiento" ? formatearFechaDMA(rec[key]) : (rec[key] ?? "");
           cell.font = { size: 9 };
           cell.alignment = { vertical: "middle", wrapText: false };
           cell.border = {
