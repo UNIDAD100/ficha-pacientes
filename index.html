@@ -247,6 +247,7 @@ function FichaPacientes() {
   const [adminInput, setAdminInput] = useState("");
   const [adminError, setAdminError] = useState("");
   const [mesEliminar, setMesEliminar] = useState("");
+  const [mesInforme, setMesInforme] = useState(mesActualNombre());
   const [dialog, setDialog] = useState(null);
   const [toast, setToast] = useState("");
   const [editId, setEditId] = useState(null);
@@ -603,7 +604,7 @@ function FichaPacientes() {
       // ------------------------------------------------------------------
       // HOJA 2: Reporte Mensual (solo los registros del mes actual)
       // ------------------------------------------------------------------
-      const mesReporte = mesActualNombre();
+      const mesReporte = mesInforme;
       const anioReporte = new Date().getFullYear();
       const delMes = arr.filter((r) => r.mes === mesReporte);
 
@@ -972,7 +973,11 @@ function FichaPacientes() {
             </div>
             {userRole === "admin" && (
               <>
-                <div className="flex gap-2 mb-3 flex-wrap">
+                <div className="flex gap-2 mb-3 flex-wrap items-end">
+                  <div className="w-40">
+                    <label className="block text-[11px] text-slate-500 mb-1">Mes del reporte (Hoja 2)</label>
+                    <SelectInput value={mesInforme} onChange={setMesInforme} options={CATALOGOS.MESES} placeholder="Elige un mes" />
+                  </div>
                   <button onClick={handleExport} className="text-xs flex items-center gap-1 bg-slate-800 text-white px-2 py-1.5 rounded-lg hover:bg-slate-700">⬇️ Exportar respaldo</button>
                   <button onClick={vaciarTodo} className="text-xs flex items-center gap-1 bg-red-600 text-white px-2 py-1.5 rounded-lg hover:bg-red-700">🗑️ Vaciar todos los registros</button>
                 </div>
