@@ -600,6 +600,143 @@ function FichaPacientes() {
       sheet.views = [{ state: "frozen", ySplit: 3 }];
       sheet.pageSetup.printTitlesRow = "1:3";
 
+      // ------------------------------------------------------------------
+      // HOJA 2: Reporte Mensual (solo los registros del mes actual)
+      // ------------------------------------------------------------------
+      const mesReporte = mesActualNombre();
+      const anioReporte = new Date().getFullYear();
+      const delMes = arr.filter((r) => r.mes === mesReporte);
+
+      const esEmbarazada = (r) => r.motivo_orientacion === "4-Embarazo";
+      const edadNum = (r) => (r.edad === "" || r.edad === null || r.edad === undefined ? null : Number(r.edad));
+
+      const totalTamizajes = delMes.length;
+      const totalFemenino = delMes.filter((r) => r.sexo_nacer === "Mujer").length;
+      const totalMasculino = delMes.filter((r) => r.sexo_nacer === "Hombre").length;
+      const menores18 = delMes.filter((r) => edadNum(r) !== null && edadNum(r) < 18).length;
+      const mayores18 = delMes.filter((r) => edadNum(r) !== null && edadNum(r) >= 18).length;
+      const menores10 = delMes.filter((r) => edadNum(r) !== null && edadNum(r) < 10).length;
+      const embarazadasTotal = delMes.filter(esEmbarazada).length;
+      const embarazadasMenores = delMes.filter((r) => esEmbarazada(r) && edadNum(r) !== null && edadNum(r) < 18).length;
+
+      const porServicio = {};
+      delMes.forEach((r) => {
+        const s = r.servicio || "Sin especificar";
+        porServicio[s] = (porServicio[s] || 0) + 1;
+      });
+      const serviciosOrdenados = Object.entries(porServicio).sort((a, b) => b[1] - a[1]);
+
+      const reporte = workbook.addWorksheet("Reporte Mensual", {
+        pageSetup: {
+          orientation: "portrait",
+          paperSize: 5,
+          fitToPage: true,
+          fitToWidth: 1,
+          fitToHeight: 0,
+          margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 },
+        },
+      });
+      reporte.getColumn(1).width = 34;
+      reporte.getColumn(2).width = 16;
+      reporte.getColumn(3).width = 3;
+      reporte.getColumn(4).width = 30;
+      reporte.getColumn(5).width = 16;
+
+      // Título
+      reporte.mergeCells(1, 1, 1, 5);
+      const repTitulo = reporte.getCell(1, 1);
+      repTitulo.value = `Reporte Mensual — ${mesReporte} ${anioReporte}`;
+      repTitulo.font = { bold: true, size: 15, color: { argb: "FFFFFFFF" } };
+      repTitulo.alignment = { horizontal: "center", vertical: "middle" };
+      repTitulo.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0F766E" } };
+      reporte.getRow(1).height = 28;
+
+      reporte.mergeCells(2, 1, 2, 5);
+      const repSub = reporte.getCell(2, 1);
+      repSub.value = "Ficha de Atención a Pacientes — Resumen para entrega de fin de mes";
+      repSub.font = { italic: true, size: 10, color: { argb: "FF475569" } };
+      repSub.alignment = { horizontal: "center" };
+      reporte.getRow(2).height = 18;
+
+      function estiloEncabezadoTabla(cell) {
+        cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 10 };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF134E4A" } };
+        cell.alignment = { horizontal: "left", vertical: "middle" };
+        cell.border = {
+          top: { style: "thin", color: { argb: "FF0F172A" } },
+          left: { style: "thin", color: { argb: "FF0F172A" } },
+          bottom: { style: "thin", color: { argb: "FF0F172A" } },
+          right: { style: "thin", color: { argb: "FF0F172A" } },
+        };
+      }
+      function estiloFilaTabla(cell, banda) {
+        cell.font = { size: 10 };
+        cell.border = {
+          top: { style: "thin", color: { argb: "FFD1D5DB" } },
+          left: { style: "thin", color: { argb: "FFD1D5DB" } },
+          bottom: { style: "thin", color: { argb: "FFD1D5DB" } },
+          right: { style: "thin", color: { argb: "FFD1D5DB" } },
+        };
+        if (banda) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0FDFA" } };
+      }
+
+      // Tabla de indicadores generales
+      let fila = 4;
+      reporte.getCell(fila, 1).value = "Indicador";
+      reporte.getCell(fila, 2).value = "Cantidad";
+      estiloEncabezadoTabla(reporte.getCell(fila, 1));
+      estiloEncabezadoTabla(reporte.getCell(fila, 2));
+      fila++;
+
+      const indicadores = [
+        ["Total de tamizajes realizados en el mes", totalTamizajes],
+        ["Pacientes femeninos", totalFemenino],
+        ["Pacientes masculinos", totalMasculino],
+        ["Menores de 18 años", menores18],
+        ["Mayores de 18 años", mayores18],
+        ["Menores de 10 años", menores10],
+        ["Embarazadas (total)", embarazadasTotal],
+        ["Embarazadas menores de edad", embarazadasMenores],
+      ];
+      indicadores.forEach(([label, valor], idx) => {
+        const c1 = reporte.getCell(fila, 1);
+        const c2 = reporte.getCell(fila, 2);
+        c1.value = label;
+        c2.value = valor;
+        c2.alignment = { horizontal: "center" };
+        estiloFilaTabla(c1, idx % 2 === 1);
+        estiloFilaTabla(c2, idx % 2 === 1);
+        fila++;
+      });
+
+      // Tabla de pacientes por servicio, al lado (columnas D y E)
+      let filaServ = 4;
+      reporte.getCell(filaServ, 4).value = "Servicio";
+      reporte.getCell(filaServ, 5).value = "Cantidad";
+      estiloEncabezadoTabla(reporte.getCell(filaServ, 4));
+      estiloEncabezadoTabla(reporte.getCell(filaServ, 5));
+      filaServ++;
+
+      if (serviciosOrdenados.length === 0) {
+        const c1 = reporte.getCell(filaServ, 4);
+        const c2 = reporte.getCell(filaServ, 5);
+        c1.value = "Sin registros este mes";
+        c2.value = 0;
+        estiloFilaTabla(c1, false);
+        estiloFilaTabla(c2, false);
+      } else {
+        serviciosOrdenados.forEach(([servicio, cantidad], idx) => {
+          const c1 = reporte.getCell(filaServ, 4);
+          const c2 = reporte.getCell(filaServ, 5);
+          c1.value = servicio;
+          c2.value = cantidad;
+          c2.alignment = { horizontal: "center" };
+          estiloFilaTabla(c1, idx % 2 === 1);
+          estiloFilaTabla(c2, idx % 2 === 1);
+          filaServ++;
+        });
+      }
+
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
