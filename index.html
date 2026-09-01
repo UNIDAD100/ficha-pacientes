@@ -229,6 +229,45 @@ function SearchableSelect({ value, onChange, options, placeholder = "Seleccione.
   );
 }
 
+function MonthMultiSelect({ value, onChange, options }) {
+  const [open, setOpen] = useState(false);
+  function toggle(mes) {
+    if (value.includes(mes)) onChange(value.filter((m) => m !== mes));
+    else onChange([...value, mes]);
+  }
+  const lleno = value.length > 0;
+  const label =
+    value.length === 0 ? "Selecciona uno o varios meses" : value.length <= 2 ? value.join(", ") : `${value.length} meses seleccionados`;
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`w-full text-left rounded-lg border px-3 py-2 text-sm bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500 ${lleno ? "border-teal-400 bg-teal-50" : "border-slate-300"}`}
+      >
+        {label}
+      </button>
+      {open && (
+        <div className="absolute z-20 mt-1 w-56 max-h-56 overflow-y-auto bg-white border border-slate-300 rounded-lg shadow-lg p-2">
+          {options.map((mes) => (
+            <label key={mes} className="flex items-center gap-2 px-2 py-1 text-sm hover:bg-teal-50 rounded cursor-pointer">
+              <input type="checkbox" checked={value.includes(mes)} onChange={() => toggle(mes)} />
+              {mes}
+            </label>
+          ))}
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="mt-1 w-full text-xs bg-teal-600 text-white rounded-lg py-1.5 hover:bg-teal-700"
+          >
+            Listo
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FichaPacientes() {
   const [form, setForm] = useState(getDefaultForm);
   const [stepIdx, setStepIdx] = useState(0);
@@ -247,7 +286,7 @@ function FichaPacientes() {
   const [adminInput, setAdminInput] = useState("");
   const [adminError, setAdminError] = useState("");
   const [mesEliminar, setMesEliminar] = useState("");
-  const [mesInforme, setMesInforme] = useState(mesActualNombre());
+  const [mesesInforme, setMesesInforme] = useState([mesActualNombre()]);
   const [dialog, setDialog] = useState(null);
   const [toast, setToast] = useState("");
   const [editId, setEditId] = useState(null);
@@ -602,11 +641,13 @@ function FichaPacientes() {
       sheet.pageSetup.printTitlesRow = "1:3";
 
       // ------------------------------------------------------------------
-      // HOJA 2: Reporte Mensual (solo los registros del mes actual)
+      // HOJA 2: Reporte Mensual (solo los meses elegidos)
       // ------------------------------------------------------------------
-      const mesReporte = mesInforme;
+      const mesesReporte = mesesInforme.length > 0 ? mesesInforme : [mesActualNombre()];
+      const tituloMeses =
+        mesesReporte.length === 1 ? mesesReporte[0] : mesesReporte.length <= 3 ? mesesReporte.join(" + ") : `${mesesReporte.length} meses`;
       const anioReporte = new Date().getFullYear();
-      const delMes = arr.filter((r) => r.mes === mesReporte);
+      const delMes = arr.filter((r) => mesesReporte.includes(r.mes));
 
       const esEmbarazada = (r) => r.motivo_orientacion === "4-Embarazo";
       const edadNum = (r) => (r.edad === "" || r.edad === null || r.edad === undefined ? null : Number(r.edad));
@@ -619,17 +660,24 @@ function FichaPacientes() {
       const menores10 = delMes.filter((r) => edadNum(r) !== null && edadNum(r) < 10).length;
       const embarazadasTotal = delMes.filter(esEmbarazada).length;
       const embarazadasMenores = delMes.filter((r) => esEmbarazada(r) && edadNum(r) !== null && edadNum(r) < 18).length;
+      const abs = delMes.filter((r) => r.motivo_orientacion === "10-Agresión Sexual").length;
 
-      const porServicio = {};
+      // Por servicio: Embarazadas, Mayores de 18, Menores de 18, Menores de 10 (igual al formato en papel)
+      const serviciosStats = {};
       delMes.forEach((r) => {
         const s = r.servicio || "Sin especificar";
-        porServicio[s] = (porServicio[s] || 0) + 1;
+        if (!serviciosStats[s]) serviciosStats[s] = { embarazadas: 0, mayores18: 0, menores18: 0, menores10: 0 };
+        if (esEmbarazada(r)) serviciosStats[s].embarazadas++;
+        const e = edadNum(r);
+        if (e !== null && e >= 18) serviciosStats[s].mayores18++;
+        if (e !== null && e < 18) serviciosStats[s].menores18++;
+        if (e !== null && e < 10) serviciosStats[s].menores10++;
       });
-      const serviciosOrdenados = Object.entries(porServicio).sort((a, b) => b[1] - a[1]);
+      const serviciosStatsOrdenados = Object.entries(serviciosStats).sort((a, b) => a[0].localeCompare(b[0]));
 
       const reporte = workbook.addWorksheet("Reporte Mensual", {
         pageSetup: {
-          orientation: "portrait",
+          orientation: "landscape",
           paperSize: 5,
           fitToPage: true,
           fitToWidth: 1,
@@ -637,16 +685,16 @@ function FichaPacientes() {
           margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 },
         },
       });
-      reporte.getColumn(1).width = 34;
-      reporte.getColumn(2).width = 16;
-      reporte.getColumn(3).width = 3;
-      reporte.getColumn(4).width = 30;
-      reporte.getColumn(5).width = 16;
+      reporte.getColumn(1).width = 28;
+      reporte.getColumn(2).width = 14;
+      reporte.getColumn(3).width = 14;
+      reporte.getColumn(4).width = 14;
+      reporte.getColumn(5).width = 14;
 
       // Título
       reporte.mergeCells(1, 1, 1, 5);
       const repTitulo = reporte.getCell(1, 1);
-      repTitulo.value = `Reporte Mensual — ${mesReporte} ${anioReporte}`;
+      repTitulo.value = `Reporte Mensual — ${tituloMeses} ${anioReporte}`;
       repTitulo.font = { bold: true, size: 15, color: { argb: "FFFFFFFF" } };
       repTitulo.alignment = { horizontal: "center", vertical: "middle" };
       repTitulo.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0F766E" } };
@@ -662,7 +710,7 @@ function FichaPacientes() {
       function estiloEncabezadoTabla(cell) {
         cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 10 };
         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF134E4A" } };
-        cell.alignment = { horizontal: "left", vertical: "middle" };
+        cell.alignment = { horizontal: "center", vertical: "middle" };
         cell.border = {
           top: { style: "thin", color: { argb: "FF0F172A" } },
           left: { style: "thin", color: { argb: "FF0F172A" } },
@@ -681,62 +729,99 @@ function FichaPacientes() {
         if (banda) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0FDFA" } };
       }
 
-      // Tabla de indicadores generales
-      let fila = 4;
-      reporte.getCell(fila, 1).value = "Indicador";
-      reporte.getCell(fila, 2).value = "Cantidad";
-      estiloEncabezadoTabla(reporte.getCell(fila, 1));
-      estiloEncabezadoTabla(reporte.getCell(fila, 2));
-      fila++;
-
-      const indicadores = [
-        ["Total de tamizajes realizados en el mes", totalTamizajes],
-        ["Pacientes femeninos", totalFemenino],
-        ["Pacientes masculinos", totalMasculino],
-        ["Menores de 18 años", menores18],
-        ["Mayores de 18 años", mayores18],
-        ["Menores de 10 años", menores10],
-        ["Embarazadas (total)", embarazadasTotal],
-        ["Embarazadas menores de edad", embarazadasMenores],
-      ];
-      indicadores.forEach(([label, valor], idx) => {
-        const c1 = reporte.getCell(fila, 1);
-        const c2 = reporte.getCell(fila, 2);
-        c1.value = label;
-        c2.value = valor;
-        c2.alignment = { horizontal: "center" };
-        estiloFilaTabla(c1, idx % 2 === 1);
-        estiloFilaTabla(c2, idx % 2 === 1);
-        fila++;
-      });
-
-      // Tabla de pacientes por servicio, al lado (columnas D y E)
+      // Tabla principal: un renglón por servicio, igual a la hoja de papel
       let filaServ = 4;
-      reporte.getCell(filaServ, 4).value = "Servicio";
-      reporte.getCell(filaServ, 5).value = "Cantidad";
-      estiloEncabezadoTabla(reporte.getCell(filaServ, 4));
-      estiloEncabezadoTabla(reporte.getCell(filaServ, 5));
+      reporte.getCell(filaServ, 1).value = "Servicios";
+      reporte.getCell(filaServ, 2).value = "Embarazadas";
+      reporte.getCell(filaServ, 3).value = "Mayores de 18";
+      reporte.getCell(filaServ, 4).value = "Menores de 18";
+      reporte.getCell(filaServ, 5).value = "Menores de 10";
+      [1, 2, 3, 4, 5].forEach((col) => estiloEncabezadoTabla(reporte.getCell(filaServ, col)));
       filaServ++;
 
-      if (serviciosOrdenados.length === 0) {
-        const c1 = reporte.getCell(filaServ, 4);
-        const c2 = reporte.getCell(filaServ, 5);
-        c1.value = "Sin registros este mes";
-        c2.value = 0;
-        estiloFilaTabla(c1, false);
-        estiloFilaTabla(c2, false);
+      if (serviciosStatsOrdenados.length === 0) {
+        reporte.getCell(filaServ, 1).value = "Sin registros este mes";
+        estiloFilaTabla(reporte.getCell(filaServ, 1), false);
+        [2, 3, 4, 5].forEach((col) => {
+          const c = reporte.getCell(filaServ, col);
+          c.value = 0;
+          c.alignment = { horizontal: "center" };
+          estiloFilaTabla(c, false);
+        });
+        filaServ++;
       } else {
-        serviciosOrdenados.forEach(([servicio, cantidad], idx) => {
-          const c1 = reporte.getCell(filaServ, 4);
-          const c2 = reporte.getCell(filaServ, 5);
+        serviciosStatsOrdenados.forEach(([servicio, stats], idx) => {
+          const banda = idx % 2 === 1;
+          const c1 = reporte.getCell(filaServ, 1);
+          const c2 = reporte.getCell(filaServ, 2);
+          const c3 = reporte.getCell(filaServ, 3);
+          const c4 = reporte.getCell(filaServ, 4);
+          const c5 = reporte.getCell(filaServ, 5);
           c1.value = servicio;
-          c2.value = cantidad;
-          c2.alignment = { horizontal: "center" };
-          estiloFilaTabla(c1, idx % 2 === 1);
-          estiloFilaTabla(c2, idx % 2 === 1);
+          c2.value = stats.embarazadas;
+          c3.value = stats.mayores18;
+          c4.value = stats.menores18;
+          c5.value = stats.menores10;
+          [c2, c3, c4, c5].forEach((c) => (c.alignment = { horizontal: "center" }));
+          [c1, c2, c3, c4, c5].forEach((c) => estiloFilaTabla(c, banda));
           filaServ++;
         });
       }
+
+      // Fila de totales, al final de la tabla
+      const totalRow = reporte.getRow(filaServ);
+      reporte.getCell(filaServ, 1).value = "TOTAL";
+      reporte.getCell(filaServ, 2).value = embarazadasTotal;
+      reporte.getCell(filaServ, 3).value = mayores18;
+      reporte.getCell(filaServ, 4).value = menores18;
+      reporte.getCell(filaServ, 5).value = menores10;
+      [1, 2, 3, 4, 5].forEach((col) => {
+        const c = reporte.getCell(filaServ, col);
+        c.font = { bold: true, size: 10 };
+        c.alignment = { horizontal: col === 1 ? "left" : "center" };
+        c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE2E8F0" } };
+        c.border = {
+          top: { style: "double", color: { argb: "FF0F172A" } },
+          left: { style: "thin", color: { argb: "FF0F172A" } },
+          bottom: { style: "thin", color: { argb: "FF0F172A" } },
+          right: { style: "thin", color: { argb: "FF0F172A" } },
+        };
+      });
+      filaServ += 2;
+
+      // Resumen final, igual al pie de la hoja de papel
+      reporte.mergeCells(filaServ, 1, filaServ, 5);
+      const tituloResumen = reporte.getCell(filaServ, 1);
+      tituloResumen.value = "Resumen del mes";
+      tituloResumen.font = { bold: true, size: 12, color: { argb: "FFFFFFFF" } };
+      tituloResumen.alignment = { horizontal: "left", vertical: "middle" };
+      tituloResumen.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0F766E" } };
+      reporte.getRow(filaServ).height = 22;
+      filaServ++;
+
+      const resumen = [
+        ["Total de tamizajes realizados", totalTamizajes],
+        ["Hombres", totalMasculino],
+        ["Mujeres", totalFemenino],
+        ["Embarazadas", embarazadasTotal],
+        ["Embarazadas menores de 18", embarazadasMenores],
+        ["ABS (violencia/agresión sexual)", abs],
+        ["Mayores de 18 años", mayores18],
+        ["Menores de 18 años", menores18],
+        ["Menores de 10 años", menores10],
+      ];
+      resumen.forEach(([label, valor], idx) => {
+        const c1 = reporte.getCell(filaServ, 1);
+        const c2 = reporte.getCell(filaServ, 2);
+        c1.value = label;
+        c1.font = { bold: true, size: 10 };
+        c2.value = valor;
+        c2.font = { bold: true, size: 11, color: { argb: "FF0F766E" } };
+        c2.alignment = { horizontal: "center" };
+        estiloFilaTabla(c1, idx % 2 === 1);
+        estiloFilaTabla(c2, idx % 2 === 1);
+        filaServ++;
+      });
 
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], {
@@ -974,9 +1059,9 @@ function FichaPacientes() {
             {userRole === "admin" && (
               <>
                 <div className="flex gap-2 mb-3 flex-wrap items-end">
-                  <div className="w-40">
-                    <label className="block text-[11px] text-slate-500 mb-1">Mes del reporte (Hoja 2)</label>
-                    <SelectInput value={mesInforme} onChange={setMesInforme} options={CATALOGOS.MESES} placeholder="Elige un mes" />
+                  <div className="w-48">
+                    <label className="block text-[11px] text-slate-500 mb-1">Mes(es) del reporte (Hoja 2)</label>
+                    <MonthMultiSelect value={mesesInforme} onChange={setMesesInforme} options={CATALOGOS.MESES} />
                   </div>
                   <button onClick={handleExport} className="text-xs flex items-center gap-1 bg-slate-800 text-white px-2 py-1.5 rounded-lg hover:bg-slate-700">⬇️ Exportar respaldo</button>
                   <button onClick={vaciarTodo} className="text-xs flex items-center gap-1 bg-red-600 text-white px-2 py-1.5 rounded-lg hover:bg-red-700">🗑️ Vaciar todos los registros</button>
