@@ -870,6 +870,111 @@ function FichaPacientes() {
         });
       }
 
+      // ------------------------------------------------------------------
+      // HOJA 3: Ficha Individual (formato tarjeta, como la hoja de papel)
+      // ------------------------------------------------------------------
+      const fichas = workbook.addWorksheet("Ficha Individual", {
+        pageSetup: {
+          orientation: "portrait",
+          paperSize: 9,
+          fitToPage: true,
+          fitToWidth: 1,
+          fitToHeight: 0,
+          margins: { left: 0.4, right: 0.4, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 },
+        },
+      });
+      fichas.getColumn(1).width = 28;
+      fichas.getColumn(2).width = 42;
+
+      const bordeFino = {
+        top: { style: "thin", color: { argb: "FF64748B" } },
+        left: { style: "thin", color: { argb: "FF64748B" } },
+        bottom: { style: "thin", color: { argb: "FF64748B" } },
+        right: { style: "thin", color: { argb: "FF64748B" } },
+      };
+
+      const CAMPOS_FICHA = [
+        ["FECHA", (r) => formatearFechaDMA(r.fecha_orientacion)],
+        ["CUI / PASAPORTE", (r) => r.cui_pasaporte || ""],
+        ["NOMBRE COMPLETO DEL PACIENTE", (r) => [r.primer_nombre, r.segundo_nombre, r.primer_apellido, r.segundo_apellido].filter(Boolean).join(" ")],
+        ["EDAD", (r) => (r.edad ?? "").toString()],
+        ["MENOR DE EDAD", (r) => r.menor_edad || ""],
+        ["FECHA DE NACIMIENTO COMPLETA", (r) => formatearFechaDMA(r.fecha_nacimiento)],
+        ["LUGAR DE NACIMIENTO", (r) => [r.muni_nacimiento, r.depto_nacimiento].filter(Boolean).join(", ")],
+        ["LUGAR DE RESIDENCIA", (r) => [r.direccion_residencia, r.muni_residencia, r.depto_residencia].filter(Boolean).join(", ")],
+        ["No. DE TELEFONO", (r) => r.telefono || ""],
+        ["PUEBLO", (r) => r.pueblo || ""],
+        ["IDIOMA QUE HABLA", (r) => r.comunidad_linguistica || ""],
+        ["ESTADO CIVIL", (r) => r.estado_civil || ""],
+        ["ORIENTACION SEXUAL", (r) => r.orientacion_sexual || ""],
+        ["IDENTIDAD DE GENERO", (r) => r.identidad_genero || ""],
+        ["ESCOLARIDAD", (r) => r.escolaridad || ""],
+        ["CONDICION DE RIESGO", (r) => r.condicion_riesgo || ""],
+        ["MOTIVO DE ORIENTACION", (r) => r.motivo_orientacion || ""],
+        ["SI ESTA EMBARAZADA, SEMANAS DE GESTACION", (r) => (r.motivo_orientacion === "4-Embarazo" ? `Sí — Semana ${r.semana_gestacion || "?"}` : "No")],
+        ["SE HIZO LA PRUEBA", (r) => r.se_hizo_prueba || ""],
+      ];
+
+      function escribirFicha(ws, startRow, rec) {
+        let f = startRow;
+
+        ws.mergeCells(f, 1, f, 2);
+        const enc = ws.getCell(f, 1);
+        enc.value = "HOSPITAL NACIONAL DE SALAMÁ";
+        enc.font = { bold: true, size: 11 };
+        enc.alignment = { horizontal: "center" };
+        ws.getRow(f).height = 16;
+        f++;
+
+        ws.mergeCells(f, 1, f, 2);
+        const sub = ws.getCell(f, 1);
+        sub.value = "REGISTRO DE PACIENTES CON PRUEBA DE VIH/ITS";
+        sub.font = { bold: true, size: 9, italic: true };
+        sub.alignment = { horizontal: "center" };
+        f++;
+
+        const cMes = ws.getCell(f, 1);
+        cMes.value = `MES: ${rec.mes || ""}`;
+        const cServ = ws.getCell(f, 2);
+        cServ.value = `SERVICIO: ${rec.servicio || ""}  (Hoja ${rec.no_hoja}/Orden ${rec.no_orden})`;
+        [cMes, cServ].forEach((c) => {
+          c.font = { bold: true, size: 9, color: { argb: "FFFFFFFF" } };
+          c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF134E4A" } };
+          c.border = bordeFino;
+          c.alignment = { vertical: "middle" };
+        });
+        f++;
+
+        CAMPOS_FICHA.forEach(([label, fn]) => {
+          const c1 = ws.getCell(f, 1);
+          const c2 = ws.getCell(f, 2);
+          c1.value = label;
+          c1.font = { bold: true, size: 8.5, color: { argb: "FF0F172A" } };
+          c1.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1F5F9" } };
+          c2.value = fn(rec) || "";
+          c2.font = { size: 9 };
+          [c1, c2].forEach((c) => {
+            c.border = bordeFino;
+            c.alignment = { vertical: "middle", wrapText: true };
+          });
+          f++;
+        });
+
+        return f + 2;
+      }
+
+      let filaFicha = 1;
+      delMes.forEach((rec, idx) => {
+        filaFicha = escribirFicha(fichas, filaFicha, rec);
+        if ((idx + 1) % 3 === 0) {
+          fichas.getRow(filaFicha - 1).addPageBreak();
+        }
+      });
+      if (delMes.length === 0) {
+        fichas.getCell(1, 1).value = "Sin registros para el mes seleccionado.";
+        fichas.getCell(1, 1).font = { italic: true, size: 10 };
+      }
+
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
