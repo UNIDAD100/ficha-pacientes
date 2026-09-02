@@ -669,7 +669,8 @@ function FichaPacientes() {
       const serviciosStats = {};
       delMes.forEach((r) => {
         const s = r.servicio || "Sin especificar";
-        if (!serviciosStats[s]) serviciosStats[s] = { embarazadas: 0, mayores18: 0, menores18: 0, menores10: 0 };
+        if (!serviciosStats[s]) serviciosStats[s] = { embarazadas: 0, mayores18: 0, menores18: 0, menores10: 0, total: 0 };
+        serviciosStats[s].total++;
         if (esEmbarazada(r)) serviciosStats[s].embarazadas++;
         const e = edadNum(r);
         if (e !== null && e >= 18) serviciosStats[s].mayores18++;
@@ -693,9 +694,10 @@ function FichaPacientes() {
       reporte.getColumn(3).width = 14;
       reporte.getColumn(4).width = 14;
       reporte.getColumn(5).width = 14;
+      reporte.getColumn(6).width = 12;
 
       // Título
-      reporte.mergeCells(1, 1, 1, 5);
+      reporte.mergeCells(1, 1, 1, 6);
       const repTitulo = reporte.getCell(1, 1);
       repTitulo.value = `Reporte Mensual — ${tituloMeses} ${anioReporte}`;
       repTitulo.font = { bold: true, size: 15, color: { argb: "FFFFFFFF" } };
@@ -703,7 +705,7 @@ function FichaPacientes() {
       repTitulo.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0F766E" } };
       reporte.getRow(1).height = 28;
 
-      reporte.mergeCells(2, 1, 2, 5);
+      reporte.mergeCells(2, 1, 2, 6);
       const repSub = reporte.getCell(2, 1);
       repSub.value = "Ficha de Atención a Pacientes — Resumen para entrega de fin de mes";
       repSub.font = { italic: true, size: 10, color: { argb: "FF475569" } };
@@ -739,13 +741,14 @@ function FichaPacientes() {
       reporte.getCell(filaServ, 3).value = "Mayores de 18";
       reporte.getCell(filaServ, 4).value = "Menores de 18";
       reporte.getCell(filaServ, 5).value = "Menores de 10";
-      [1, 2, 3, 4, 5].forEach((col) => estiloEncabezadoTabla(reporte.getCell(filaServ, col)));
+      reporte.getCell(filaServ, 6).value = "Total";
+      [1, 2, 3, 4, 5, 6].forEach((col) => estiloEncabezadoTabla(reporte.getCell(filaServ, col)));
       filaServ++;
 
       if (serviciosStatsOrdenados.length === 0) {
         reporte.getCell(filaServ, 1).value = "Sin registros este mes";
         estiloFilaTabla(reporte.getCell(filaServ, 1), false);
-        [2, 3, 4, 5].forEach((col) => {
+        [2, 3, 4, 5, 6].forEach((col) => {
           const c = reporte.getCell(filaServ, col);
           c.value = 0;
           c.alignment = { horizontal: "center" };
@@ -760,25 +763,28 @@ function FichaPacientes() {
           const c3 = reporte.getCell(filaServ, 3);
           const c4 = reporte.getCell(filaServ, 4);
           const c5 = reporte.getCell(filaServ, 5);
+          const c6 = reporte.getCell(filaServ, 6);
           c1.value = servicio;
           c2.value = stats.embarazadas;
           c3.value = stats.mayores18;
           c4.value = stats.menores18;
           c5.value = stats.menores10;
-          [c2, c3, c4, c5].forEach((c) => (c.alignment = { horizontal: "center" }));
-          [c1, c2, c3, c4, c5].forEach((c) => estiloFilaTabla(c, banda));
+          c6.value = stats.total;
+          c6.font = { size: 10, bold: true };
+          [c2, c3, c4, c5, c6].forEach((c) => (c.alignment = { horizontal: "center" }));
+          [c1, c2, c3, c4, c5, c6].forEach((c) => estiloFilaTabla(c, banda));
           filaServ++;
         });
       }
 
       // Fila de totales, al final de la tabla
-      const totalRow = reporte.getRow(filaServ);
       reporte.getCell(filaServ, 1).value = "TOTAL";
       reporte.getCell(filaServ, 2).value = embarazadasTotal;
       reporte.getCell(filaServ, 3).value = mayores18;
       reporte.getCell(filaServ, 4).value = menores18;
       reporte.getCell(filaServ, 5).value = menores10;
-      [1, 2, 3, 4, 5].forEach((col) => {
+      reporte.getCell(filaServ, 6).value = totalTamizajes;
+      [1, 2, 3, 4, 5, 6].forEach((col) => {
         const c = reporte.getCell(filaServ, col);
         c.font = { bold: true, size: 10 };
         c.alignment = { horizontal: col === 1 ? "left" : "center" };
@@ -793,7 +799,7 @@ function FichaPacientes() {
       filaServ += 2;
 
       // Resumen final, igual al pie de la hoja de papel
-      reporte.mergeCells(filaServ, 1, filaServ, 5);
+      reporte.mergeCells(filaServ, 1, filaServ, 6);
       const tituloResumen = reporte.getCell(filaServ, 1);
       tituloResumen.value = "Resumen del mes";
       tituloResumen.font = { bold: true, size: 12, color: { argb: "FFFFFFFF" } };
@@ -831,7 +837,7 @@ function FichaPacientes() {
 
       if (conMesInvalido.length > 0) {
         filaServ += 1;
-        reporte.mergeCells(filaServ, 1, filaServ, 4);
+        reporte.mergeCells(filaServ, 1, filaServ, 6);
         const tituloAlerta = reporte.getCell(filaServ, 1);
         tituloAlerta.value = "⚠ Registros a revisar (MES vacío o distinto a los del catálogo)";
         tituloAlerta.font = { bold: true, size: 11, color: { argb: "FFFFFFFF" } };
