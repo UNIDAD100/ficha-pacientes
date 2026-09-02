@@ -658,9 +658,9 @@ function FichaPacientes() {
       const totalTamizajes = delMes.length;
       const totalFemenino = delMes.filter((r) => r.sexo_nacer === "Mujer").length;
       const totalMasculino = delMes.filter((r) => r.sexo_nacer === "Hombre").length;
-      const menores18 = delMes.filter((r) => edadNum(r) !== null && edadNum(r) < 18).length;
       const mayores18 = delMes.filter((r) => edadNum(r) !== null && edadNum(r) >= 18).length;
-      const menores10 = delMes.filter((r) => edadNum(r) !== null && edadNum(r) < 10).length;
+      const rango0a10 = delMes.filter((r) => edadNum(r) !== null && edadNum(r) >= 0 && edadNum(r) <= 10).length;
+      const rango11a17 = delMes.filter((r) => edadNum(r) !== null && edadNum(r) >= 11 && edadNum(r) <= 17).length;
       const embarazadasTotal = delMes.filter(esEmbarazada).length;
       const embarazadasMenores = delMes.filter((r) => esEmbarazada(r) && edadNum(r) !== null && edadNum(r) < 18).length;
       const abs = delMes.filter((r) => r.motivo_orientacion === "10-Agresión Sexual").length;
@@ -669,13 +669,13 @@ function FichaPacientes() {
       const serviciosStats = {};
       delMes.forEach((r) => {
         const s = r.servicio || "Sin especificar";
-        if (!serviciosStats[s]) serviciosStats[s] = { embarazadas: 0, mayores18: 0, menores18: 0, menores10: 0, total: 0 };
+        if (!serviciosStats[s]) serviciosStats[s] = { embarazadas: 0, mayores18: 0, rango0a10: 0, rango11a17: 0, total: 0 };
         serviciosStats[s].total++;
         if (esEmbarazada(r)) serviciosStats[s].embarazadas++;
         const e = edadNum(r);
         if (e !== null && e >= 18) serviciosStats[s].mayores18++;
-        if (e !== null && e < 18) serviciosStats[s].menores18++;
-        if (e !== null && e < 10) serviciosStats[s].menores10++;
+        if (e !== null && e >= 0 && e <= 10) serviciosStats[s].rango0a10++;
+        if (e !== null && e >= 11 && e <= 17) serviciosStats[s].rango11a17++;
       });
       const serviciosStatsOrdenados = Object.entries(serviciosStats).sort((a, b) => a[0].localeCompare(b[0]));
 
@@ -739,8 +739,8 @@ function FichaPacientes() {
       reporte.getCell(filaServ, 1).value = "Servicios";
       reporte.getCell(filaServ, 2).value = "Embarazadas";
       reporte.getCell(filaServ, 3).value = "Mayores de 18";
-      reporte.getCell(filaServ, 4).value = "Menores de 18";
-      reporte.getCell(filaServ, 5).value = "Menores de 10";
+      reporte.getCell(filaServ, 4).value = "0 a 10 años";
+      reporte.getCell(filaServ, 5).value = "11 a 17 años";
       reporte.getCell(filaServ, 6).value = "Total";
       [1, 2, 3, 4, 5, 6].forEach((col) => estiloEncabezadoTabla(reporte.getCell(filaServ, col)));
       filaServ++;
@@ -767,8 +767,8 @@ function FichaPacientes() {
           c1.value = servicio;
           c2.value = stats.embarazadas;
           c3.value = stats.mayores18;
-          c4.value = stats.menores18;
-          c5.value = stats.menores10;
+          c4.value = stats.rango0a10;
+          c5.value = stats.rango11a17;
           c6.value = stats.total;
           c6.font = { size: 10, bold: true };
           [c2, c3, c4, c5, c6].forEach((c) => (c.alignment = { horizontal: "center" }));
@@ -781,8 +781,8 @@ function FichaPacientes() {
       reporte.getCell(filaServ, 1).value = "TOTAL";
       reporte.getCell(filaServ, 2).value = embarazadasTotal;
       reporte.getCell(filaServ, 3).value = mayores18;
-      reporte.getCell(filaServ, 4).value = menores18;
-      reporte.getCell(filaServ, 5).value = menores10;
+      reporte.getCell(filaServ, 4).value = rango0a10;
+      reporte.getCell(filaServ, 5).value = rango11a17;
       reporte.getCell(filaServ, 6).value = totalTamizajes;
       [1, 2, 3, 4, 5, 6].forEach((col) => {
         const c = reporte.getCell(filaServ, col);
@@ -816,8 +816,8 @@ function FichaPacientes() {
         ["Embarazadas menores de 18", embarazadasMenores],
         ["ABS (violencia/agresión sexual)", abs],
         ["Mayores de 18 años", mayores18],
-        ["Menores de 18 años", menores18],
-        ["Menores de 10 años", menores10],
+        ["0 a 10 años", rango0a10],
+        ["11 a 17 años", rango11a17],
         ["Total en toda la base de datos (todos los meses)", arr.length],
         ["No incluidos en este reporte (mes distinto al filtro)", noIncluidosEnFiltro],
         ["Con MES vacío o no reconocido (revisar en Hoja 1)", conMesInvalido.length],
