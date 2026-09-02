@@ -345,7 +345,10 @@ function FichaPacientes() {
 
   async function cargarConteo() {
     try {
-      const { data, error } = await supabase.rpc("siguiente_hoja_orden");
+      const { data, error } = await supabase.rpc("siguiente_hoja_orden", {
+        p_mes: mesActualNombre(),
+        p_anio: new Date().getFullYear(),
+      });
       if (error) throw error;
       const row = data && data[0];
       const count = row ? (row.hoja - 1) * REGISTROS_POR_HOJA + (row.orden - 1) : 0;
@@ -424,6 +427,7 @@ function FichaPacientes() {
       } else {
         const { data: rpcData, error: rpcErr } = await supabase.rpc("insertar_registro_paciente", {
           p_mes: form.mes,
+          p_anio: Number(form.anio) || new Date().getFullYear(),
           p_data: form,
         });
         if (rpcErr) throw rpcErr;
@@ -940,7 +944,7 @@ function FichaPacientes() {
             <div className="bg-teal-600 text-white rounded-lg p-2">📋</div>
             <div>
               <h1 className="text-sm font-semibold text-slate-800">Ficha de Atención a Pacientes</h1>
-              <p className="text-xs text-slate-500">{loaded ? `${savedCount} registro(s) guardado(s)` : "Cargando..."}</p>
+              <p className="text-xs text-slate-500">{loaded ? `${savedCount} registro(s) este mes (${mesActualNombre()})` : "Cargando..."}</p>
             </div>
           </div>
           <div className="flex gap-2">
