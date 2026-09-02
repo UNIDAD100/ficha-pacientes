@@ -287,6 +287,7 @@ function FichaPacientes() {
   const [adminError, setAdminError] = useState("");
   const [mesEliminar, setMesEliminar] = useState("");
   const [mesesInforme, setMesesInforme] = useState([mesActualNombre()]);
+  const [busqueda, setBusqueda] = useState("");
   const [dialog, setDialog] = useState(null);
   const [toast, setToast] = useState("");
   const [editId, setEditId] = useState(null);
@@ -648,6 +649,8 @@ function FichaPacientes() {
         mesesReporte.length === 1 ? mesesReporte[0] : mesesReporte.length <= 3 ? mesesReporte.join(" + ") : `${mesesReporte.length} meses`;
       const anioReporte = new Date().getFullYear();
       const delMes = arr.filter((r) => mesesReporte.includes(r.mes));
+      const conMesInvalido = arr.filter((r) => !CATALOGOS.MESES.includes(r.mes));
+      const noIncluidosEnFiltro = arr.length - delMes.length;
 
       const esEmbarazada = (r) => r.motivo_orientacion === "4-Embarazo";
       const edadNum = (r) => (r.edad === "" || r.edad === null || r.edad === undefined ? null : Number(r.edad));
@@ -809,6 +812,9 @@ function FichaPacientes() {
         ["Mayores de 18 años", mayores18],
         ["Menores de 18 años", menores18],
         ["Menores de 10 años", menores10],
+        ["Total en toda la base de datos (todos los meses)", arr.length],
+        ["No incluidos en este reporte (mes distinto al filtro)", noIncluidosEnFiltro],
+        ["Con MES vacío o no reconocido (revisar en Hoja 1)", conMesInvalido.length],
       ];
       resumen.forEach(([label, valor], idx) => {
         const c1 = reporte.getCell(filaServ, 1);
@@ -822,6 +828,37 @@ function FichaPacientes() {
         estiloFilaTabla(c2, idx % 2 === 1);
         filaServ++;
       });
+
+      if (conMesInvalido.length > 0) {
+        filaServ += 1;
+        reporte.mergeCells(filaServ, 1, filaServ, 4);
+        const tituloAlerta = reporte.getCell(filaServ, 1);
+        tituloAlerta.value = "⚠ Registros a revisar (MES vacío o distinto a los del catálogo)";
+        tituloAlerta.font = { bold: true, size: 11, color: { argb: "FFFFFFFF" } };
+        tituloAlerta.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFB91C1C" } };
+        tituloAlerta.alignment = { vertical: "middle" };
+        reporte.getRow(filaServ).height = 20;
+        filaServ++;
+
+        reporte.getCell(filaServ, 1).value = "Hoja/Orden";
+        reporte.getCell(filaServ, 2).value = "Nombre";
+        reporte.getCell(filaServ, 3).value = "MES guardado";
+        [1, 2, 3].forEach((col) => estiloEncabezadoTabla(reporte.getCell(filaServ, col)));
+        filaServ++;
+
+        conMesInvalido.forEach((r, idx) => {
+          const c1 = reporte.getCell(filaServ, 1);
+          const c2 = reporte.getCell(filaServ, 2);
+          const c3 = reporte.getCell(filaServ, 3);
+          c1.value = `${r.no_hoja}/${r.no_orden}`;
+          c2.value = `${r.primer_nombre || ""} ${r.primer_apellido || ""}`.trim();
+          c3.value = r.mes ? `"${r.mes}"` : "(vacío)";
+          estiloFilaTabla(c1, idx % 2 === 1);
+          estiloFilaTabla(c2, idx % 2 === 1);
+          estiloFilaTabla(c3, idx % 2 === 1);
+          filaServ++;
+        });
+      }
 
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], {
@@ -839,6 +876,23 @@ function FichaPacientes() {
       mostrarAviso("No se pudo exportar. Intenta de nuevo.");
     }
   }
+
+  const registrosFiltrados = !busqueda.trim()
+    ? registros
+    : registros.filter((r) => {
+        const q = busqueda.trim().toLowerCase();
+        const campos = [
+          r.primer_nombre,
+          r.segundo_nombre,
+          r.primer_apellido,
+          r.segundo_apellido,
+          r.cui_pasaporte,
+          r.servicio,
+          r.telefono,
+          `${r.no_hoja}/${r.no_orden}`,
+        ];
+        return campos.some((c) => (c || "").toString().toLowerCase().includes(q));
+      });
 
   const municipiosNacimiento = CATALOGOS.DEPARTAMENTOS.find((d) => d.nombre === form.depto_nacimiento)?.municipios || [];
   const municipiosResidencia = CATALOGOS.DEPARTAMENTOS.find((d) => d.nombre === form.depto_residencia)?.municipios || [];
@@ -1052,7 +1106,8 @@ function FichaPacientes() {
           <div className="mt-4 bg-white rounded-2xl shadow-sm border border-amber-200 p-4">
             <div className="flex justify-between items-center mb-3">
               <h3 className="text-sm font-semibold text-slate-800">
-                🔒 {userRole === "admin" ? "Panel de administrador" : "Vista de solo lectura"} ({registros.length} registros)
+                🔒 {userRole === "admin" ? "Panel de administrador" : "Vista de solo lectura"} (
+                {busqueda.trim() ? `${registrosFiltrados.length} de ${registros.length}` : registros.length} registros)
               </h3>
               <button onClick={cerrarSesionAdmin} className="text-xs text-slate-400">Cerrar sesión</button>
             </div>
@@ -1072,6 +1127,9 @@ function FichaPacientes() {
                 </div>
               </>
             )}
+            <div className="mb-3">
+              <TextInput value={busqueda} onChange={setBusqueda} placeholder="🔎 Buscar por nombre, apellido, CUI, servicio o Hoja/Orden..." />
+            </div>
             <div className="overflow-x-auto max-h-72 overflow-y-auto">
               <table className="text-xs w-full">
                 <thead><tr className="text-left text-slate-400 border-b border-slate-100">
@@ -1079,7 +1137,7 @@ function FichaPacientes() {
                   {userRole === "admin" && <th className="pr-3 py-1"></th>}
                 </tr></thead>
                 <tbody>
-                  {registros.map((r) => (
+                  {registrosFiltrados.map((r) => (
                     <tr key={r.id} className="border-b border-slate-50 text-slate-600">
                       <td className="pr-3 py-1">{r.no_hoja}/{r.no_orden}</td>
                       <td className="pr-3 py-1">{r.primer_nombre} {r.primer_apellido}</td>
@@ -1095,7 +1153,11 @@ function FichaPacientes() {
                   ))}
                 </tbody>
               </table>
-              {registros.length === 0 && <p className="text-xs text-slate-400 py-4 text-center">Sin registros todavía.</p>}
+              {registrosFiltrados.length === 0 && (
+                <p className="text-xs text-slate-400 py-4 text-center">
+                  {busqueda.trim() ? "Sin resultados para esa búsqueda." : "Sin registros todavía."}
+                </p>
+              )}
             </div>
           </div>
         )}
